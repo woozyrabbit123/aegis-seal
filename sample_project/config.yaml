@@ -1,0 +1,17 @@
+# Configuration file with secrets
+
+database:
+  host: localhost
+  port: 5432
+  username: admin
+  password: super_secret_password_123
+
+github:
+  token: ghp_FAKE_EXAMPLE_TOKEN_NOT_REAL_TESTING
+
+aws:
+  access_key: AKIA_FAKE_EXAMPLE_ACCESS_KEY
+  secret_key: example/fake/aws/secret/key/not/real
+
+slack:
+  webhook: https://hooks.slack.com/services/FAKE/EXAMPLE/FakeWebhookNotReal
