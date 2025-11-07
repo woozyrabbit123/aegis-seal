@@ -115,8 +115,8 @@ def test_sarif_fingerprints():
     sarif = generate_sarif_report(findings, rules, Path("/tmp"))
 
     result = sarif["runs"][0]["results"][0]
-    assert "partialFingerprints" in result
-    assert "primaryLocationLineHash" in result["partialFingerprints"]
+    assert "fingerprints" in result
+    assert "primaryLocationLineHash" in result["fingerprints"]
 
 
 def test_sarif_deterministic_output():

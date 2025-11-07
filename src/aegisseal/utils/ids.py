@@ -169,3 +169,53 @@ def compute_finding_hash(
     # Compute SHA256
     hash_obj = hashlib.sha256(hash_input.encode("utf-8"))
     return hash_obj.hexdigest()[:16]
+
+
+def compute_line_hash(line_content: str) -> str:
+    """
+    Compute a stable hash for a line of code.
+
+    Used for SARIF fingerprints to enable deduplication across scans.
+
+    Args:
+        line_content: The line content to hash
+
+    Returns:
+        SHA-1 hash as hex string (40 chars)
+    """
+    # Strip whitespace for stability
+    normalized = line_content.strip()
+
+    # Compute SHA-1 (SARIF convention)
+    hash_obj = hashlib.sha1(normalized.encode("utf-8"))
+    return hash_obj.hexdigest()
+
+
+def stable_sort_results(results: list) -> list:
+    """
+    Sort results deterministically for byte-identical output.
+
+    Sorts by: (file_path, line_number, rule_id)
+
+    Args:
+        results: List of result dictionaries (SARIF or Finding objects)
+
+    Returns:
+        Sorted list
+    """
+    def get_sort_key(result):
+        # Handle both Finding objects and dictionaries
+        if hasattr(result, 'file_path'):
+            # Finding object
+            return (result.file_path, result.line_number, result.rule_id)
+        elif isinstance(result, dict):
+            # SARIF result dictionary
+            if 'locations' in result and result['locations']:
+                loc = result['locations'][0]
+                file_path = loc.get('physicalLocation', {}).get('artifactLocation', {}).get('uri', '')
+                line_num = loc.get('physicalLocation', {}).get('region', {}).get('startLine', 0)
+                rule_id = result.get('ruleId', '')
+                return (file_path, line_num, rule_id)
+        return ('', 0, '')
+
+    return sorted(results, key=get_sort_key)
