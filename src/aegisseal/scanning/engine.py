@@ -7,6 +7,7 @@ from typing import List, Optional
 from aegisseal.scanning.baseline import Baseline
 from aegisseal.scanning.detectors import DetectorEngine, Finding, load_default_rules
 from aegisseal.scanning.entropy import scan_line_entropy
+from aegisseal.scanning.suppression import is_suppressed_by_comment
 from aegisseal.utils.io import read_file_lines, walk_files
 
 
@@ -122,6 +123,13 @@ class ScanEngine:
         for line_number, line in enumerate(lines, start=1):
             # Regex-based detection
             line_findings = self.detector.scan_line(line, line_number, relative_path)
+
+            # Filter out findings suppressed by inline comments
+            line_findings = [
+                f for f in line_findings
+                if not is_suppressed_by_comment(line, f.rule_id)
+            ]
+
             findings.extend(line_findings)
 
             # Entropy-based detection (opt-in)
@@ -133,6 +141,13 @@ class ScanEngine:
                     high_threshold=self.config.entropy_high_threshold,
                     medium_threshold=self.config.entropy_medium_threshold,
                 )
+
+                # Filter entropy findings too
+                entropy_findings = [
+                    f for f in entropy_findings
+                    if not is_suppressed_by_comment(line, f.rule_id)
+                ]
+
                 findings.extend(entropy_findings)
 
         return findings
