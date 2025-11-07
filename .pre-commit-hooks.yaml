@@ -1,0 +1,9 @@
+- id: aegis-seal-scan
+  name: Aegis Seal Secret Scan
+  entry: aegis-seal
+  args: ["scan", "--target", ".", "--format", "json"]
+  language: python
+  types: [file]
+  pass_filenames: false
+  require_serial: true
+  description: Run Aegis Seal secret scanner on your repository

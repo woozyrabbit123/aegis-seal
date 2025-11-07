@@ -269,36 +269,87 @@ Entropy scanning is **opt-in**. When enabled, it uses conservative thresholds:
 - Medium entropy: ≥4.0 bits/char
 - Minimum length: 20 characters
 
-## 🔄 CI/CD Integration
+## 🚀 Adoption & Integration
+
+### Pre-commit Hook
+
+Catch secrets before they're committed:
+
+```bash
+# Install pre-commit configuration
+aegis-seal hook --install
+
+# Install pre-commit framework
+pip install pre-commit
+
+# Install the git hooks
+pre-commit install
+
+# Test it
+pre-commit run --all-files
+```
+
+**Manual setup:** Add to `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/woozyrabbit123/aegis-seal
+    rev: main  # or specify a version tag
+    hooks:
+      - id: aegis-seal-scan
+```
 
 ### GitHub Actions
 
+**Quick setup:**
+
+```bash
+# Generate example workflow
+aegis-seal action --example > .github/workflows/aegis.yml
+```
+
+**Example workflow:**
+
 ```yaml
-name: Secret Scanning
-on: [push, pull_request]
+name: Aegis Seal Security Scan
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
 
 jobs:
-  scan:
+  secret-scan:
+    name: Scan for Secrets
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Install Aegis Seal
-        run: pip install aegis-seal
-
-      - name: Scan for secrets
-        run: aegis-seal scan --target . --format sarif --output reports/
-
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v2
+      - name: Run Aegis Seal
+        uses: woozyrabbit123/aegis-seal/contrib/github-action@main
         with:
-          sarif_file: reports/scan.sarif
+          target: src/
+          upload-sarif: true
 ```
+
+**Features:**
+- ✅ Automatic SARIF upload to GitHub Security
+- ✅ Supports pull request annotations
+- ✅ Configurable target path
+- ✅ Optional SARIF upload control
 
 ### GitLab CI
 
 ```yaml
 secret-scan:
+  image: python:3.11
   script:
     - pip install aegis-seal
     - aegis-seal scan --target . --format sarif --output reports/
@@ -306,6 +357,28 @@ secret-scan:
     reports:
       sast: reports/scan.sarif
 ```
+
+### Other CI Systems
+
+For Jenkins, CircleCI, Travis CI, or any CI system:
+
+```bash
+# Install
+pip install aegis-seal
+
+# Scan and output SARIF
+aegis-seal scan --target . --format sarif --output reports/
+
+# Check exit code (0 = no secrets found)
+```
+
+### Local-First Philosophy
+
+Aegis Seal runs entirely **offline** with **zero network calls**:
+- ✅ No data leaves your machine
+- ✅ Works in air-gapped environments
+- ✅ Fast: no API rate limits
+- ✅ Privacy-focused: secrets never transmitted
 
 ## 🧪 Testing
 
