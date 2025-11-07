@@ -1,0 +1,22 @@
+# These should NOT be flagged due to context hints
+
+# Example tokens should be suppressed
+gitlab_example_token = glpat-ExampleTokenNotRealForTest
+
+# Test tokens should be suppressed
+test_npm_token = npm_TestTokenNotRealExample123456789012
+
+# Dummy tokens should be suppressed
+dummy_openai_key = sk-DummyKeyForTestingPurposesOnly123456789012
+
+# Example in comments should be suppressed
+# Example: sk-abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGHIJ
+
+# Sample keys should be suppressed
+sample_sendgrid = SG.SampleKeyNotRealTest.SampleSignatureForDocumentation12345678901234
+
+# UUIDs in test files should not be flagged as Heroku keys
+test_uuid = 12345678-1234-5678-1234-567890abcdef  # test uuid
+
+# Placeholder values
+placeholder_token = glpat-PlaceholderValueNotReal

@@ -1,0 +1,23 @@
+# GitLab Personal Access Token (should be detected)
+gitlab_token = glpat-AbCdEfGhIjKlMnOpQrSt
+
+# GitLab Runner Token (should be detected)
+runner_token = GR1348941AbCdEfGhIjKlMnOpQrSt
+
+# Bitbucket Client Secret (should be detected)
+bitbucket_client_secret = "abcdef1234567890abcdef1234567890"
+
+# NPM Token (should be detected)
+npm_token = npm_1234567890abcdefABCDEF1234567890GHIJ
+
+# PyPI Token (should be detected)
+pypi_token = pypi-AgEIcHlwaS5vcmcCJGFiY2RlZi0xMjM0LTU2NzgtOTBhYi1jZGVmMTIzNDU2NzgACiFbMSxbImFiY2RlZiJdXQAABiCcvJDWNT3SZ0H_wZQh9mF9vH7
+
+# Docker PAT (should be detected)
+docker_token = dckr_pat_1234567890abcdefABCDEF1234567890
+
+# DSA Private Key (should be detected)
+-----BEGIN DSA PRIVATE KEY-----
+
+# EC Private Key (should be detected)
+-----BEGIN EC PRIVATE KEY-----
