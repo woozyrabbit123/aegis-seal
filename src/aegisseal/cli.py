@@ -52,6 +52,11 @@ def cmd_scan(args: argparse.Namespace) -> int:
 
     formats = args.format.split(",") if args.format != "all" else ["json", "sarif", "html"]
 
+    # Generate SARIF first (needed for HTML embedding)
+    sarif_data = None
+    if "sarif" in formats or "html" in formats:
+        sarif_data = generate_sarif_report(result.findings, engine.rules, target_path)
+
     for fmt in formats:
         fmt = fmt.strip().lower()
 
@@ -64,14 +69,13 @@ def cmd_scan(args: argparse.Namespace) -> int:
             print(f"📄 JSON report saved to {json_path}")
 
         elif fmt == "sarif":
-            sarif_data = generate_sarif_report(result.findings, engine.rules, target_path)
             sarif_path = output_dir / "scan.sarif"
             save_sarif_report(sarif_data, sarif_path)
             print(f"📄 SARIF report saved to {sarif_path}")
 
         elif fmt == "html":
             html_content = generate_html_report(
-                result.findings, result.scanned_files, result.suppressed_findings
+                result.findings, result.scanned_files, sarif_data, result.suppressed_findings
             )
             html_path = output_dir / "scan.html"
             save_html_report(html_content, html_path)
