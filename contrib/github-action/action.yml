@@ -22,7 +22,7 @@ runs:
 
     - name: Install Aegis Seal
       shell: bash
-      run: pip install .
+      run: pip install "${{ github.action_path }}"
 
     - name: Run Aegis Seal Scan
       shell: bash

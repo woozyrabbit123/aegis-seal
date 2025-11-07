@@ -30,6 +30,8 @@ def cmd_scan(args: argparse.Namespace) -> int:
         exclude_patterns=exclude_patterns,
         enable_entropy=args.enable_entropy,
         baseline_path=baseline_path if baseline_path.exists() else None,
+        max_workers=args.max_workers if hasattr(args, 'max_workers') else 0,
+        max_file_size=args.max_file_size if hasattr(args, 'max_file_size') else 1_000_000,
     )
 
     # Run scan
@@ -40,7 +42,13 @@ def cmd_scan(args: argparse.Namespace) -> int:
     engine = ScanEngine(config)
     result = engine.scan()
 
-    print(f"✅ Scanned {result.scanned_files} files")
+    # Performance summary
+    print(f"✅ Scanned {result.scanned_files} files in {result.scan_time:.2f}s")
+    if result.scanned_files > 0:
+        print(f"⚡ Speed: {result.scanned_files / result.scan_time:.1f} files/sec")
+    if result.skipped_files > 0:
+        print(f"⏭️  Skipped {result.skipped_files} files (size limit)")
+
     print(f"🔎 Found {result.total_findings} potential secrets")
 
     if result.suppressed_findings > 0:
@@ -84,6 +92,9 @@ def cmd_scan(args: argparse.Namespace) -> int:
     # Return exit code based on findings
     if result.total_findings > 0:
         print(f"\n⚠️  Found {result.total_findings} potential secrets!")
+        # Use soft-exit if requested (useful for CI/CD where you want visibility but not failure)
+        if args.soft_exit:
+            return 0
         return 1
 
     print("\n✅ No secrets found!")
@@ -337,6 +348,18 @@ def main() -> int:
         "--output", default="reports", help="Output directory for reports (default: reports)"
     )
     scan_parser.add_argument("--baseline", help="Path to baseline file (default: .aegis.baseline)")
+    scan_parser.add_argument(
+        "--max-workers", type=int, default=0,
+        help="Maximum parallel workers (0=auto, default: min(32, cpu_count))"
+    )
+    scan_parser.add_argument(
+        "--max-file-size", type=int, default=1_000_000,
+        help="Skip files larger than this size in bytes (default: 1MB)"
+    )
+    scan_parser.add_argument(
+        "--soft-exit", action="store_true",
+        help="Exit with code 0 even if secrets are found (useful for visibility-only CI checks)"
+    )
 
     # Fix command
     fix_parser = subparsers.add_parser("fix", help="Auto-fix secrets in Python files")
