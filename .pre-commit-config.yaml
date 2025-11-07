@@ -1,0 +1,6 @@
+# Add this to your .pre-commit-config.yaml file:
+repos:
+  - repo: https://github.com/woozyrabbit123/aegis-seal
+    rev: main  # or specify a version tag
+    hooks:
+      - id: aegis-seal-scan

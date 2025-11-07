@@ -1,0 +1,35 @@
+name: "Aegis Seal Scanner"
+description: "Local-first secret scanning with Aegis Seal"
+author: "Aegis Seal Contributors"
+
+inputs:
+  target:
+    description: "Path to scan"
+    required: false
+    default: "."
+  upload-sarif:
+    description: "Upload SARIF results to GitHub Security"
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install Aegis Seal
+      shell: bash
+      run: pip install .
+
+    - name: Run Aegis Seal Scan
+      shell: bash
+      run: aegis-seal scan --target "${{ inputs.target }}" --format sarif --output reports/
+
+    - name: Upload SARIF to GitHub Security
+      if: inputs.upload-sarif == 'true'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: reports/scan.sarif

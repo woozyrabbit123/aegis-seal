@@ -238,6 +238,77 @@ def cmd_rules(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_hook(args: argparse.Namespace) -> int:
+    """Execute the hook command."""
+    if args.install:
+        # Generate .pre-commit-config.yaml snippet
+        precommit_config = Path(".pre-commit-config.yaml")
+
+        snippet = """# Add this to your .pre-commit-config.yaml file:
+repos:
+  - repo: https://github.com/woozyrabbit123/aegis-seal
+    rev: main  # or specify a version tag
+    hooks:
+      - id: aegis-seal-scan
+"""
+
+        if precommit_config.exists():
+            print("⚠️  .pre-commit-config.yaml already exists!")
+            print("📝 Add the following to your configuration:\n")
+            print(snippet)
+        else:
+            print("📄 Creating .pre-commit-config.yaml...")
+            precommit_config.write_text(snippet)
+            print("✅ Created .pre-commit-config.yaml")
+            print("\n💡 Next steps:")
+            print("   1. Install pre-commit: pip install pre-commit")
+            print("   2. Install the hook: pre-commit install")
+            print("   3. Test it: pre-commit run --all-files")
+
+        return 0
+    else:
+        print("Usage: aegis-seal hook --install")
+        return 1
+
+
+def cmd_action(args: argparse.Namespace) -> int:
+    """Execute the action command."""
+    if args.example:
+        # Print example GitHub Action workflow
+        workflow = """name: Aegis Seal Security Scan
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  secret-scan:
+    name: Scan for Secrets
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Aegis Seal
+        uses: woozyrabbit123/aegis-seal/contrib/github-action@main
+        with:
+          target: src/
+          upload-sarif: true
+"""
+        print(workflow)
+        return 0
+    else:
+        print("Usage: aegis-seal action --example")
+        return 1
+
+
 def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -288,6 +359,18 @@ def main() -> int:
     # Rules command
     rules_parser = subparsers.add_parser("rules", help="List active detection rules")
 
+    # Hook command
+    hook_parser = subparsers.add_parser("hook", help="Manage pre-commit hooks")
+    hook_parser.add_argument(
+        "--install", action="store_true", help="Install pre-commit configuration"
+    )
+
+    # Action command
+    action_parser = subparsers.add_parser("action", help="Manage GitHub Actions")
+    action_parser.add_argument(
+        "--example", action="store_true", help="Print example workflow YAML"
+    )
+
     args = parser.parse_args()
 
     if not args.command:
@@ -303,6 +386,10 @@ def main() -> int:
             return cmd_baseline(args)
         elif args.command == "rules":
             return cmd_rules(args)
+        elif args.command == "hook":
+            return cmd_hook(args)
+        elif args.command == "action":
+            return cmd_action(args)
         else:
             parser.print_help()
             return 1
