@@ -10,27 +10,102 @@ from typing import Dict
 
 # Registry of known rule IDs
 RULE_ID_REGISTRY: Dict[str, int] = {
+    # GitHub (1000-1099)
     "github_pat": 1001,
     "github_oauth": 1002,
     "github_app": 1003,
     "github_refresh": 1004,
+
+    # AWS (1100-1199)
     "aws_access_key": 1100,
     "aws_secret_key": 1101,
     "aws_session_token": 1102,
+
+    # Private Keys (1200-1299)
     "generic_private_key": 1200,
     "rsa_private_key": 1201,
     "ssh_private_key": 1202,
     "pgp_private_key": 1203,
+    "dsa_private_key": 1204,
+    "ec_private_key": 1205,
+
+    # Slack (1300-1399)
     "slack_token": 1300,
     "slack_webhook": 1301,
+
+    # Stripe (1400-1499)
     "stripe_key": 1400,
+
+    # Google/GCP (1500-1599)
     "google_api_key": 1500,
     "google_oauth": 1501,
+    "gcp_service_account": 1502,
+    "gcp_api_key": 1503,
+
+    # Azure (1600-1699)
     "azure_client_secret": 1600,
+    "azure_storage_key": 1601,
+    "azure_connection_string": 1602,
+
+    # JWT/Generic (1700-1799)
     "jwt_token": 1700,
+
+    # Generic API (1800-1899)
     "generic_api_key": 1800,
+
+    # Kubernetes (1900-1999)
+    "k8s_token": 1900,
+
+    # Entropy-based (2000-2099)
     "entropy_high": 2001,
     "entropy_medium": 2002,
+
+    # GitLab (3000-3099)
+    "gitlab_pat": 3000,
+    "gitlab_runner_token": 3001,
+
+    # Bitbucket (3100-3199)
+    "bitbucket_key": 3100,
+
+    # NPM (3200-3299)
+    "npm_token": 3200,
+
+    # PyPI (3300-3399)
+    "pypi_token": 3300,
+
+    # Docker (3400-3499)
+    "docker_pat": 3400,
+
+    # Twilio (3500-3599)
+    "twilio_api_key": 3500,
+    "twilio_account_sid": 3501,
+
+    # Discord (3600-3699)
+    "discord_webhook": 3600,
+    "discord_bot_token": 3601,
+
+    # Auth0 (3700-3799)
+    "auth0_client_secret": 3700,
+
+    # OpenAI (3800-3899)
+    "openai_api_key": 3800,
+
+    # Heroku (3900-3999)
+    "heroku_api_key": 3900,
+
+    # Shopify (4000-4099)
+    "shopify_token": 4000,
+    "shopify_shared_secret": 4001,
+
+    # SendGrid (4100-4199)
+    "sendgrid_api_key": 4100,
+
+    # Mailgun (4200-4299)
+    "mailgun_api_key": 4200,
+
+    # Square (4300-4399)
+    "square_access_token": 4300,
+    "square_oauth_secret": 4301,
 }
 
 

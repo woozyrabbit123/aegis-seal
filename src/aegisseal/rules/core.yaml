@@ -224,3 +224,288 @@ rules:
       - 'your_api_key_here'
       - 'YOUR_API_KEY'
     description: Detects generic API key patterns (higher false positive rate)
+
+  # GCP / Google Cloud
+  - id: gcp_service_account
+    name: GCP Service Account Key
+    pattern: '"type":\s*"service_account"'
+    severity: critical
+    context_hints:
+      - example
+      - test
+      - sample
+    allowlist: []
+    description: Detects GCP service account JSON key files
+
+  - id: gcp_api_key
+    name: GCP API Key
+    pattern: '(?i)(gcp|google|cloud).*api[_-]?key[''"]?\s*[:=]\s*[''"]([A-Za-z0-9_-]{39})[''"]'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects GCP API keys with context
+
+  # Azure
+  - id: azure_storage_key
+    name: Azure Storage Account Key
+    pattern: '(?i)DefaultEndpointsProtocol=https;AccountName=[^;]+;AccountKey=[A-Za-z0-9+/=]{88}'
+    severity: critical
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects Azure Storage account connection strings
+
+  - id: azure_connection_string
+    name: Azure Connection String
+    pattern: '(?i)(azure|endpoint).*[:=].*[A-Za-z0-9+/=]{40,}'
+    severity: high
+    context_hints:
+      - example
+      - test
+      - placeholder
+    allowlist: []
+    description: Detects Azure connection strings
+
+  # Kubernetes
+  - id: k8s_token
+    name: Kubernetes Service Account Token
+    pattern: 'eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*'
+    severity: high
+    context_hints:
+      - example
+      - test
+      - dummy
+      - sample
+    allowlist: []
+    description: Detects Kubernetes service account tokens (JWT format)
+
+  # GitLab
+  - id: gitlab_pat
+    name: GitLab Personal Access Token
+    pattern: 'glpat-[0-9a-zA-Z_-]{20,}'
+    severity: high
+    context_hints:
+      - example
+      - test
+      - dummy
+    allowlist: []
+    description: Detects GitLab personal access tokens
+
+  - id: gitlab_runner_token
+    name: GitLab Runner Registration Token
+    pattern: 'GR1348941[0-9a-zA-Z_-]{20,}'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects GitLab runner registration tokens
+
+  # Bitbucket
+  - id: bitbucket_key
+    name: Bitbucket Client ID/Secret
+    pattern: '(?i)(bitbucket.*client.*(id|secret)|bitbucket.*key)\s*[:=]\s*[''"]?([a-zA-Z0-9]{32,})[''"]?'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects Bitbucket client credentials
+
+  # NPM
+  - id: npm_token
+    name: NPM Access Token
+    pattern: 'npm_[A-Za-z0-9]{36}'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects NPM access tokens
+
+  # PyPI
+  - id: pypi_token
+    name: PyPI Upload Token
+    pattern: 'pypi-AgEIcHlwaS5vcmc[A-Za-z0-9_-]{70,}'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects PyPI upload tokens
+
+  # Docker
+  - id: docker_pat
+    name: Docker Personal Access Token
+    pattern: 'dckr_pat_[a-zA-Z0-9_-]{32,}'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects Docker personal access tokens
+
+  # SSH Keys (additional variants)
+  - id: dsa_private_key
+    name: DSA Private Key
+    pattern: '-----BEGIN DSA PRIVATE KEY-----'
+    severity: critical
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects DSA private keys
+
+  - id: ec_private_key
+    name: EC Private Key
+    pattern: '-----BEGIN EC PRIVATE KEY-----'
+    severity: critical
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects EC (Elliptic Curve) private keys
+
+  # Twilio
+  - id: twilio_api_key
+    name: Twilio API Key
+    pattern: 'SK[a-z0-9]{32}'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects Twilio API keys
+
+  - id: twilio_account_sid
+    name: Twilio Account SID
+    pattern: 'AC[a-z0-9]{32}'
+    severity: medium
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects Twilio Account SIDs
+
+  # Discord
+  - id: discord_webhook
+    name: Discord Webhook URL
+    pattern: 'https://discord(?:app)?\.com/api/webhooks/[0-9]{17,19}/[a-zA-Z0-9_-]{68}'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects Discord webhook URLs
+
+  - id: discord_bot_token
+    name: Discord Bot Token
+    pattern: '[MN][A-Za-z0-9_-]{23,25}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects Discord bot tokens
+
+  # Auth0
+  - id: auth0_client_secret
+    name: Auth0 Client Secret
+    pattern: '(?i)(auth0.*client.*secret)\s*[:=]\s*[''"]?([a-zA-Z0-9_-]{64})[''"]?'
+    severity: critical
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects Auth0 client secrets
+
+  # OpenAI
+  - id: openai_api_key
+    name: OpenAI API Key
+    pattern: 'sk-[a-zA-Z0-9]{48}'
+    severity: critical
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects OpenAI API keys
+
+  # Heroku
+  - id: heroku_api_key
+    name: Heroku API Key
+    pattern: '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+    severity: high
+    context_hints:
+      - example
+      - test
+      - uuid
+      - guid
+    allowlist: []
+    description: Detects Heroku API keys (UUID format)
+
+  # Shopify
+  - id: shopify_token
+    name: Shopify Access Token
+    pattern: 'shpat_[a-fA-F0-9]{32}'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects Shopify access tokens
+
+  - id: shopify_shared_secret
+    name: Shopify Shared Secret
+    pattern: 'shpss_[a-fA-F0-9]{32}'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects Shopify shared secrets
+
+  # SendGrid
+  - id: sendgrid_api_key
+    name: SendGrid API Key
+    pattern: 'SG\.[a-zA-Z0-9_-]{22}\.[a-zA-Z0-9_-]{43}'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects SendGrid API keys
+
+  # Mailgun
+  - id: mailgun_api_key
+    name: Mailgun API Key
+    pattern: 'key-[a-z0-9]{32}'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects Mailgun API keys
+
+  # Square
+  - id: square_access_token
+    name: Square Access Token
+    pattern: 'sq0atp-[0-9A-Za-z_-]{22}'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects Square access tokens
+
+  - id: square_oauth_secret
+    name: Square OAuth Secret
+    pattern: 'sq0csp-[0-9A-Za-z_-]{43}'
+    severity: critical
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects Square OAuth secrets
