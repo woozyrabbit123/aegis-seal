@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aegis-seal"
-version = "0.1.5"
+version = "0.1.6"
 description = "Local-first secret scanner with auto-fix capabilities"
 readme = "README.md"
 license = {text = "MIT"}
