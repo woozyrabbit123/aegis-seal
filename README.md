@@ -182,7 +182,9 @@ Single-file HTML report with:
 - 📊 Summary statistics
 - 💻 No external dependencies (inline CSS/JS)
 
-## 🗂️ Baseline Management
+## 🗂️ Baseline Management & Suppression
+
+### Baseline Files
 
 Suppress known/approved findings using `.aegis.baseline`:
 
@@ -192,12 +194,59 @@ aegis-seal baseline --target . --update
 
 # Future scans will only report new secrets
 aegis-seal scan --target .
+
+# Merge new findings into existing baseline
+aegis-seal baseline --target . --update  # idempotent
 ```
 
 The baseline uses:
 - ✅ Hash-based matching (no raw secrets stored)
 - ✅ File path, line number, and rule ID
 - ✅ Content-aware (detects when secrets change)
+- ✅ Deterministic sorting for version control
+- ✅ Idempotent updates (safe to run multiple times)
+
+**Important:** Baseline stores only hashes, never raw secret values.
+
+### Inline Suppression Comments
+
+Suppress specific findings directly in code:
+
+```python
+# Single rule suppression
+token = "ghp_abc123"  # aegis: ignore=AEGIS-1001
+
+# Multiple rules
+secret = "test"  # aegis: ignore=AEGIS-1001,AEGIS-1002
+
+# Case-insensitive, space-flexible
+api_key = "sk-test"  # AEGIS: IGNORE=AEGIS-1800
+```
+
+Inline suppression is:
+- ✅ Line-scoped only (doesn't affect other lines)
+- ✅ Case-insensitive
+- ✅ Supports comma-separated rule IDs
+- ✅ Works for all file types
+
+### Example Workflow
+
+```bash
+# 1. Initial scan
+aegis-seal scan --target src/ --format all
+
+# 2. Review findings and approve known secrets
+aegis-seal baseline --target src/ --update
+
+# 3. Add inline suppressions for specific cases
+# (edit code to add # aegis: ignore=RULE-ID comments)
+
+# 4. Scan again - only new issues reported
+aegis-seal scan --target src/
+
+# 5. Fix remaining secrets
+aegis-seal fix --target src/ --yes
+```
 
 ## ⚙️ Configuration
 

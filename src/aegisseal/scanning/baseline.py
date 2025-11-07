@@ -69,13 +69,30 @@ class Baseline:
             self.entries.append(entry)
             self._hashes.add(finding_hash)
 
+    def merge(self, findings: List[Finding]) -> None:
+        """
+        Merge new findings into the baseline (preserving existing entries).
+
+        Args:
+            findings: List of findings to merge
+        """
+        for finding in findings:
+            self.add_finding(finding)
+
+    def sort_entries(self) -> None:
+        """Sort entries deterministically by (file, line, rule) for idempotent output."""
+        self.entries.sort(key=lambda e: (e.file_path, e.line_number, e.rule_id))
+
     def save(self, baseline_path: Path) -> None:
         """
-        Save baseline to file.
+        Save baseline to file with deterministic ordering.
 
         Args:
             baseline_path: Path to baseline file
         """
+        # Sort entries before saving for deterministic output
+        self.sort_entries()
+
         data = {
             "version": "1.0",
             "entries": [
@@ -88,6 +105,9 @@ class Baseline:
                 for entry in self.entries
             ],
         }
+
+        # Ensure parent directory exists
+        baseline_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(baseline_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, sort_keys=True)

@@ -169,27 +169,41 @@ def cmd_baseline(args: argparse.Namespace) -> int:
         print(f"Error: Target path does not exist: {target_path}", file=sys.stderr)
         return 1
 
-    baseline_path = target_path / ".aegis.baseline"
+    # Support custom baseline path
+    if hasattr(args, 'output') and args.output:
+        baseline_path = Path(args.output)
+    else:
+        baseline_path = target_path / ".aegis.baseline"
 
     if args.update:
-        # Run scan to find all secrets
+        # Run scan to find all secrets (without baseline filtering)
         config = ScanConfig(
             target_path=target_path,
             enable_entropy=False,  # Don't include entropy in baseline
+            baseline_path=None,  # Don't filter during baseline update
         )
 
         print(f"🔍 Scanning {target_path} to update baseline...")
         engine = ScanEngine(config)
         result = engine.scan()
 
-        # Create baseline from findings
-        baseline = Baseline()
-        for finding in result.findings:
-            baseline.add_finding(finding)
+        # Load existing baseline if present (for merging)
+        if baseline_path.exists():
+            print(f"📦 Merging with existing baseline...")
+            baseline = Baseline.load(baseline_path)
+            original_count = len(baseline.entries)
+        else:
+            baseline = Baseline()
+            original_count = 0
 
-        # Save baseline
+        # Merge findings into baseline (preserves existing entries)
+        baseline.merge(result.findings)
+
+        # Save baseline (automatically sorts)
         baseline.save(baseline_path)
-        print(f"✅ Baseline updated with {len(result.findings)} finding(s)")
+
+        added_count = len(baseline.entries) - original_count
+        print(f"✅ Baseline updated: {len(baseline.entries)} total, {added_count} new")
         print(f"📄 Saved to {baseline_path}")
         return 0
 
@@ -266,6 +280,9 @@ def main() -> int:
     baseline_parser.add_argument("--target", required=True, help="Path to scan")
     baseline_parser.add_argument(
         "--update", action="store_true", help="Update baseline with current findings"
+    )
+    baseline_parser.add_argument(
+        "--output", help="Custom baseline file path (default: <target>/.aegis.baseline)"
     )
 
     # Rules command
