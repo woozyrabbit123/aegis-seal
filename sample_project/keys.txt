@@ -1,0 +1,11 @@
+# Various API keys and tokens (EXAMPLES ONLY - NOT REAL)
+# These are FAKE examples for testing the scanner
+
+Stripe API Key: sk_test_EXAMPLE_NOT_A_REAL_KEY_12345
+
+Google API Key: AIzaSy_EXAMPLE_NOT_REAL_KEY_TESTING
+
+JWT Token: eyJFWAMPLE.NotRealToken.ForTestingOnly
+
+# This is an example token (should be suppressed by context hint)
+Example Token: ghp_0000000000000000000000000000000000

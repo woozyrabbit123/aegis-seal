@@ -1,0 +1,226 @@
+# Aegis Seal Core Detection Rules
+# Patterns derived from MIT/Apache licensed sources (Gitleaks, detect-secrets, Secrets-Patterns-DB)
+# Rule IDs: AEGIS-1000+ range
+
+rules:
+  - id: github_pat
+    name: GitHub Personal Access Token
+    pattern: 'ghp_[0-9A-Za-z]{36}'
+    severity: high
+    context_hints:
+      - example
+      - test
+      - dummy
+      - fake
+      - sample
+    allowlist:
+      - 'ghp_0000000000000000000000000000000000'
+    description: Detects GitHub personal access tokens (classic)
+
+  - id: github_oauth
+    name: GitHub OAuth Access Token
+    pattern: 'gho_[0-9A-Za-z]{36}'
+    severity: high
+    context_hints:
+      - example
+      - test
+      - dummy
+      - fake
+      - sample
+    allowlist: []
+    description: Detects GitHub OAuth access tokens
+
+  - id: github_app
+    name: GitHub App Token
+    pattern: '(ghu|ghs)_[0-9A-Za-z]{36}'
+    severity: high
+    context_hints:
+      - example
+      - test
+      - dummy
+      - fake
+    allowlist: []
+    description: Detects GitHub App tokens (user-to-server and server-to-server)
+
+  - id: github_refresh
+    name: GitHub Refresh Token
+    pattern: 'ghr_[0-9A-Za-z]{36}'
+    severity: high
+    context_hints:
+      - example
+      - test
+      - dummy
+    allowlist: []
+    description: Detects GitHub refresh tokens
+
+  - id: aws_access_key
+    name: AWS Access Key ID
+    pattern: '(A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}'
+    severity: high
+    context_hints:
+      - example
+      - test
+      - dummy
+      - fake
+      - sample
+    allowlist:
+      - 'AKIAIOSFODNN7EXAMPLE'
+    description: Detects AWS Access Key IDs
+
+  - id: aws_secret_key
+    name: AWS Secret Access Key
+    pattern: '(?i)(aws_secret_access_key|aws.secret.key)\s*[:=]\s*[''"]?([A-Za-z0-9/+=]{40})[''"]?'
+    severity: critical
+    context_hints:
+      - example
+      - test
+      - dummy
+      - fake
+    allowlist:
+      - 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
+    description: Detects AWS Secret Access Keys with context
+
+  - id: aws_session_token
+    name: AWS Session Token
+    pattern: '(?i)(aws_session_token|aws.session.token)\s*[:=]\s*[''"]?([A-Za-z0-9/+=]{100,})[''"]?'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects AWS session tokens
+
+  - id: generic_private_key
+    name: Generic Private Key
+    pattern: '-----BEGIN[A-Z ]+PRIVATE KEY-----'
+    severity: critical
+    context_hints:
+      - example
+      - test
+      - dummy
+      - fake
+      - sample
+    allowlist: []
+    description: Detects generic private key headers
+
+  - id: rsa_private_key
+    name: RSA Private Key
+    pattern: '-----BEGIN RSA PRIVATE KEY-----'
+    severity: critical
+    context_hints:
+      - example
+      - test
+      - dummy
+    allowlist: []
+    description: Detects RSA private keys
+
+  - id: ssh_private_key
+    name: SSH Private Key
+    pattern: '-----BEGIN OPENSSH PRIVATE KEY-----'
+    severity: critical
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects OpenSSH private keys
+
+  - id: pgp_private_key
+    name: PGP Private Key
+    pattern: '-----BEGIN PGP PRIVATE KEY BLOCK-----'
+    severity: critical
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects PGP private keys
+
+  - id: slack_token
+    name: Slack Token
+    pattern: 'xox[baprs]-[0-9]{10,13}-[0-9]{10,13}-[a-zA-Z0-9]{24,32}'
+    severity: high
+    context_hints:
+      - example
+      - test
+      - dummy
+    allowlist: []
+    description: Detects Slack tokens (bot, app, user, refresh, service)
+
+  - id: slack_webhook
+    name: Slack Webhook URL
+    pattern: 'https://hooks\.slack\.com/services/T[a-zA-Z0-9_]+/B[a-zA-Z0-9_]+/[a-zA-Z0-9_]+'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects Slack webhook URLs
+
+  - id: stripe_key
+    name: Stripe API Key
+    pattern: '(sk|rk)_(live|test)_[0-9a-zA-Z]{24,}'
+    severity: critical
+    context_hints:
+      - example
+      - test
+      - dummy
+    allowlist: []
+    description: Detects Stripe API keys (secret and restricted)
+
+  - id: google_api_key
+    name: Google API Key
+    pattern: 'AIza[0-9A-Za-z_-]{35}'
+    severity: high
+    context_hints:
+      - example
+      - test
+      - dummy
+      - sample
+    allowlist: []
+    description: Detects Google API keys
+
+  - id: google_oauth
+    name: Google OAuth Token
+    pattern: 'ya29\.[0-9A-Za-z_-]+'
+    severity: high
+    context_hints:
+      - example
+      - test
+    allowlist: []
+    description: Detects Google OAuth access tokens
+
+  - id: azure_client_secret
+    name: Azure Client Secret
+    pattern: '(?i)(client_secret|azure.secret)\s*[:=]\s*[''"]?([a-zA-Z0-9_~.-]{34,})[''"]?'
+    severity: high
+    context_hints:
+      - example
+      - test
+      - dummy
+    allowlist: []
+    description: Detects Azure client secrets
+
+  - id: jwt_token
+    name: JWT Token
+    pattern: 'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'
+    severity: medium
+    context_hints:
+      - example
+      - test
+      - dummy
+      - sample
+    allowlist: []
+    description: Detects JSON Web Tokens (may have false positives)
+
+  - id: generic_api_key
+    name: Generic API Key
+    pattern: '(?i)(api_key|apikey|api.key)\s*[:=]\s*[''"]?([a-zA-Z0-9_-]{20,})[''"]?'
+    severity: medium
+    context_hints:
+      - example
+      - test
+      - dummy
+      - placeholder
+    allowlist:
+      - 'your_api_key_here'
+      - 'YOUR_API_KEY'
+    description: Detects generic API key patterns (higher false positive rate)
