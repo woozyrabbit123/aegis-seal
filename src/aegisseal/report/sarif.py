@@ -1,12 +1,12 @@
-"""SARIF 2.1.0 report generator with deterministic output."""
+"""SARIF 2.1.0 report generator."""
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Dict, List
 
 from aegisseal import __version__
 from aegisseal.scanning.detectors import Finding, Rule
-from aegisseal.utils.ids import compute_line_hash, get_rule_id, stable_sort_results
 
 
 def generate_sarif_report(
@@ -15,7 +15,7 @@ def generate_sarif_report(
     scan_root: Path,
 ) -> Dict[str, Any]:
     """
-    Generate a SARIF 2.1.0 compliant report with deterministic output.
+    Generate a SARIF 2.1.0 compliant report.
 
     Args:
         findings: List of findings
@@ -25,77 +25,73 @@ def generate_sarif_report(
     Returns:
         SARIF report as dictionary
     """
-    # Create rule objects for SARIF with stable IDs
+    # Create rule objects for SARIF
     sarif_rules = []
-    rule_id_to_index = {}
+    rule_map = {}
 
     for rule in rules:
+        from aegisseal.utils.ids import get_rule_id
+
         rule_id = get_rule_id(rule.id)
+        rule_map[rule_id] = rule
+
         sarif_rule = {
             "id": rule_id,
             "name": rule.name,
             "shortDescription": {"text": rule.name},
             "fullDescription": {"text": rule.description},
-            "defaultConfiguration": {"level": _severity_to_level(rule.severity)},
+            "help": {
+                "text": f"{rule.description}\nSeverity: {rule.severity.upper()}",
+                "markdown": f"**{rule.name}**\n\n{rule.description}\n\n**Severity:** {rule.severity.upper()}",
+            },
             "properties": {
                 "tags": ["security", "secret"],
                 "security-severity": _severity_to_score(rule.severity),
             },
+            "defaultConfiguration": {"level": _severity_to_level(rule.severity)},
         }
         sarif_rules.append(sarif_rule)
-
-    # Sort rules deterministically by numeric ID, then by name
-    sarif_rules.sort(key=lambda r: (_extract_numeric_id(r["id"]), r["name"]))
-
-    # Build rule index map
-    for idx, rule in enumerate(sarif_rules):
-        rule_id_to_index[rule["id"]] = idx
 
     # Create results
     sarif_results = []
     for finding in findings:
-        # Normalize path to posix
-        file_uri = Path(finding.file_path).as_posix()
-
-        # Get rule index
-        rule_index = rule_id_to_index.get(finding.rule_id, 0)
-
-        # Generate stable line hash for fingerprint
-        line_hash = compute_line_hash(finding.line_content)
+        # Generate fingerprint for deduplication
+        fingerprint = _generate_fingerprint(finding)
 
         result = {
             "ruleId": finding.rule_id,
-            "ruleIndex": rule_index,
             "level": _severity_to_level(finding.severity),
-            "message": {"text": f"Potential secret detected: {finding.rule_name}"},
+            "message": {
+                "text": f"Potential secret detected: {finding.rule_name}",
+                "markdown": f"**Potential secret detected:** {finding.rule_name}\n\nRedacted match: `{finding.redacted_match}`",
+            },
             "locations": [
                 {
                     "physicalLocation": {
-                        "artifactLocation": {"uri": file_uri},
+                        "artifactLocation": {
+                            "uri": finding.file_path,
+                            "uriBaseId": "%SRCROOT%",
+                        },
                         "region": {
                             "startLine": finding.line_number,
                             "startColumn": 1,
+                            "snippet": {
+                                "text": _redact_line_content(finding.line_content)
+                            },
                         },
                     }
                 }
             ],
-            "fingerprints": {
-                "primaryLocationLineHash": line_hash,
-            },
-            "properties": {
-                "aegis:detector": "regex",
-                "aegis:severity": finding.severity,
+            "partialFingerprints": {
+                "primaryLocationLineHash": fingerprint,
             },
         }
         sarif_results.append(result)
 
-    # Sort results deterministically
-    sarif_results = stable_sort_results(sarif_results)
-
     # Build SARIF document
     sarif = {
-        "version": "2.1.0",
         "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+        "version": "2.1.0",
         "runs": [
             {
                 "tool": {
@@ -107,6 +103,9 @@ def generate_sarif_report(
                     }
                 },
                 "results": sarif_results,
+                "originalUriBaseIds": {
+                    "%SRCROOT%": {"uri": f"file://{scan_root.resolve()}/"}
+                },
             }
         ],
     }
@@ -119,29 +118,16 @@ def save_sarif_report(
     output_path: Path,
 ) -> None:
     """
-    Save SARIF report to file with deterministic formatting.
+    Save SARIF report to file.
 
     Args:
         sarif_data: SARIF report dictionary
         output_path: Path to save report
     """
-    from aegisseal.utils.io import write_text_atomic
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Use deterministic JSON encoding
-    # - No sort_keys (we control order explicitly)
-    # - Compact separators for smaller files
-    # - ensure_ascii=False for UTF-8 support
-    # - 2-space indent for readability
-    json_str = json.dumps(
-        sarif_data,
-        indent=2,
-        separators=(",", ": "),
-        ensure_ascii=False,
-        sort_keys=False,
-    )
-
-    # Write atomically
-    write_text_atomic(output_path, json_str)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(sarif_data, f, indent=2, sort_keys=True)
 
 
 def _severity_to_level(severity: str) -> str:
@@ -166,17 +152,36 @@ def _severity_to_score(severity: str) -> str:
     return severity_map.get(severity.lower(), "5.0")
 
 
-def _extract_numeric_id(rule_id: str) -> int:
+def _generate_fingerprint(finding: Finding) -> str:
     """
-    Extract numeric part from rule ID (e.g., "AEGIS-1234" -> 1234).
+    Generate a stable fingerprint for a finding.
 
     Args:
-        rule_id: Rule ID string
+        finding: The finding
 
     Returns:
-        Numeric part as integer
+        SHA256 hash (first 16 chars)
     """
-    try:
-        return int(rule_id.split("-")[1])
-    except (IndexError, ValueError):
-        return 0
+    # Use file path, line number, and rule ID for fingerprint
+    fingerprint_input = f"{finding.file_path}:{finding.line_number}:{finding.rule_id}"
+    hash_obj = hashlib.sha256(fingerprint_input.encode("utf-8"))
+    return hash_obj.hexdigest()[:16]
+
+
+def _redact_line_content(line: str, max_length: int = 200) -> str:
+    """
+    Redact and truncate line content for display.
+
+    Args:
+        line: Line content
+        max_length: Maximum length
+
+    Returns:
+        Redacted and truncated line
+    """
+    # Truncate if too long
+    if len(line) > max_length:
+        line = line[:max_length] + "..."
+
+    # Strip leading/trailing whitespace
+    return line.strip()

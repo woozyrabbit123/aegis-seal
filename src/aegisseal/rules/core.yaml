@@ -279,6 +279,10 @@ rules:
       - test
       - dummy
       - sample
+      - kubernetes
+      - k8s
+      - serviceaccount
+      - service-account
     allowlist: []
     description: Detects Kubernetes service account tokens (JWT format)
 
@@ -372,7 +376,7 @@ rules:
   # Twilio
   - id: twilio_api_key
     name: Twilio API Key
-    pattern: 'SK[a-z0-9]{32}'
+    pattern: 'SK[a-zA-Z0-9]{32}'
     severity: high
     context_hints:
       - example
@@ -382,7 +386,7 @@ rules:
 
   - id: twilio_account_sid
     name: Twilio Account SID
-    pattern: 'AC[a-z0-9]{32}'
+    pattern: 'AC[a-zA-Z0-9]{32}'
     severity: medium
     context_hints:
       - example

@@ -1,0 +1,29 @@
+# MANIFEST.in - Include additional package data
+# PEP 420 compliant package data inclusion
+
+# Include documentation files
+include README.md
+include LICENSE
+include CHANGELOG.md
+include CONTRIBUTING.md
+
+# Include rules YAML files
+recursive-include src/aegisseal/rules *.yaml
+
+# Include test data (if needed for package distribution)
+# recursive-include tests *.py
+
+# Exclude compiled Python files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude __pycache__
+
+# Exclude development files
+exclude .gitignore
+exclude .pre-commit-config.yaml
+exclude pytest.ini
+exclude .aegis.baseline
+
+# Exclude build artifacts
+global-exclude *.so
+global-exclude *.egg-info

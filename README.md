@@ -39,6 +39,16 @@ pip install -e ".[dev]"
 
 ## 🚀 Quick Start
 
+### Check Installation
+
+```bash
+# Verify installation
+aegis-seal --version
+
+# List detection rules
+aegis-seal rules --list
+```
+
 ### Scan for secrets
 
 ```bash
@@ -50,6 +60,9 @@ aegis-seal scan --target /path/to/project --format json
 
 # Enable entropy-based detection (opt-in)
 aegis-seal scan --target . --enable-entropy
+
+# Parallel scanning with custom worker count
+aegis-seal scan --target . --max-workers 8
 ```
 
 ### Auto-fix secrets in Python files
@@ -78,7 +91,31 @@ aegis-seal baseline --target .
 ### List detection rules
 
 ```bash
+# Detailed format (default)
 aegis-seal rules
+
+# Table format
+aegis-seal rules --list
+```
+
+## 📤 Exit Codes
+
+Aegis Seal uses standard exit codes for CI/CD integration:
+
+| Exit Code | Meaning |
+|-----------|---------|
+| 0 | Success (no secrets found, or --soft-exit used) |
+| 1 | Secrets found or error occurred |
+| 130 | Interrupted by user (Ctrl+C) |
+
+### CI/CD Usage
+
+```bash
+# Fail CI if secrets found
+aegis-seal scan --target . && echo "No secrets found!"
+
+# Continue CI even if secrets found (warning only)
+aegis-seal scan --target . --soft-exit
 ```
 
 ## 📋 Detection Rules
@@ -182,9 +219,7 @@ Single-file HTML report with:
 - 📊 Summary statistics
 - 💻 No external dependencies (inline CSS/JS)
 
-## 🗂️ Baseline Management & Suppression
-
-### Baseline Files
+## 🗂️ Baseline Management
 
 Suppress known/approved findings using `.aegis.baseline`:
 
@@ -194,59 +229,12 @@ aegis-seal baseline --target . --update
 
 # Future scans will only report new secrets
 aegis-seal scan --target .
-
-# Merge new findings into existing baseline
-aegis-seal baseline --target . --update  # idempotent
 ```
 
 The baseline uses:
 - ✅ Hash-based matching (no raw secrets stored)
 - ✅ File path, line number, and rule ID
 - ✅ Content-aware (detects when secrets change)
-- ✅ Deterministic sorting for version control
-- ✅ Idempotent updates (safe to run multiple times)
-
-**Important:** Baseline stores only hashes, never raw secret values.
-
-### Inline Suppression Comments
-
-Suppress specific findings directly in code:
-
-```python
-# Single rule suppression
-token = "ghp_abc123"  # aegis: ignore=AEGIS-1001
-
-# Multiple rules
-secret = "test"  # aegis: ignore=AEGIS-1001,AEGIS-1002
-
-# Case-insensitive, space-flexible
-api_key = "sk-test"  # AEGIS: IGNORE=AEGIS-1800
-```
-
-Inline suppression is:
-- ✅ Line-scoped only (doesn't affect other lines)
-- ✅ Case-insensitive
-- ✅ Supports comma-separated rule IDs
-- ✅ Works for all file types
-
-### Example Workflow
-
-```bash
-# 1. Initial scan
-aegis-seal scan --target src/ --format all
-
-# 2. Review findings and approve known secrets
-aegis-seal baseline --target src/ --update
-
-# 3. Add inline suppressions for specific cases
-# (edit code to add # aegis: ignore=RULE-ID comments)
-
-# 4. Scan again - only new issues reported
-aegis-seal scan --target src/
-
-# 5. Fix remaining secrets
-aegis-seal fix --target src/ --yes
-```
 
 ## ⚙️ Configuration
 
@@ -269,87 +257,36 @@ Entropy scanning is **opt-in**. When enabled, it uses conservative thresholds:
 - Medium entropy: ≥4.0 bits/char
 - Minimum length: 20 characters
 
-## 🚀 Adoption & Integration
-
-### Pre-commit Hook
-
-Catch secrets before they're committed:
-
-```bash
-# Install pre-commit configuration
-aegis-seal hook --install
-
-# Install pre-commit framework
-pip install pre-commit
-
-# Install the git hooks
-pre-commit install
-
-# Test it
-pre-commit run --all-files
-```
-
-**Manual setup:** Add to `.pre-commit-config.yaml`:
-
-```yaml
-repos:
-  - repo: https://github.com/woozyrabbit123/aegis-seal
-    rev: main  # or specify a version tag
-    hooks:
-      - id: aegis-seal-scan
-```
+## 🔄 CI/CD Integration
 
 ### GitHub Actions
 
-**Quick setup:**
-
-```bash
-# Generate example workflow
-aegis-seal action --example > .github/workflows/aegis.yml
-```
-
-**Example workflow:**
-
 ```yaml
-name: Aegis Seal Security Scan
-
-on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+name: Secret Scanning
+on: [push, pull_request]
 
 jobs:
-  secret-scan:
-    name: Scan for Secrets
+  scan:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      security-events: write
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
-      - name: Run Aegis Seal
-        uses: woozyrabbit123/aegis-seal/contrib/github-action@main
+      - name: Install Aegis Seal
+        run: pip install aegis-seal
+
+      - name: Scan for secrets
+        run: aegis-seal scan --target . --format sarif --output reports/
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v2
         with:
-          target: src/
-          upload-sarif: true
+          sarif_file: reports/scan.sarif
 ```
-
-**Features:**
-- ✅ Automatic SARIF upload to GitHub Security
-- ✅ Supports pull request annotations
-- ✅ Configurable target path
-- ✅ Optional SARIF upload control
 
 ### GitLab CI
 
 ```yaml
 secret-scan:
-  image: python:3.11
   script:
     - pip install aegis-seal
     - aegis-seal scan --target . --format sarif --output reports/
@@ -357,28 +294,6 @@ secret-scan:
     reports:
       sast: reports/scan.sarif
 ```
-
-### Other CI Systems
-
-For Jenkins, CircleCI, Travis CI, or any CI system:
-
-```bash
-# Install
-pip install aegis-seal
-
-# Scan and output SARIF
-aegis-seal scan --target . --format sarif --output reports/
-
-# Check exit code (0 = no secrets found)
-```
-
-### Local-First Philosophy
-
-Aegis Seal runs entirely **offline** with **zero network calls**:
-- ✅ No data leaves your machine
-- ✅ Works in air-gapped environments
-- ✅ Fast: no API rate limits
-- ✅ Privacy-focused: secrets never transmitted
 
 ## 🧪 Testing
 

@@ -4,6 +4,14 @@ import argparse
 import sys
 from pathlib import Path
 
+# Windows-safe UTF-8 I/O handling
+if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass  # Silently fail if reconfigure not available
+
 from aegisseal import __version__
 from aegisseal.fix.libcst_fix import apply_fixes, filter_python_findings
 from aegisseal.report.html import generate_html_report, save_html_report
@@ -30,8 +38,6 @@ def cmd_scan(args: argparse.Namespace) -> int:
         exclude_patterns=exclude_patterns,
         enable_entropy=args.enable_entropy,
         baseline_path=baseline_path if baseline_path.exists() else None,
-        max_workers=args.max_workers if hasattr(args, 'max_workers') else 0,
-        max_file_size=args.max_file_size if hasattr(args, 'max_file_size') else 1_000_000,
     )
 
     # Run scan
@@ -42,13 +48,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
     engine = ScanEngine(config)
     result = engine.scan()
 
-    # Performance summary
-    print(f"✅ Scanned {result.scanned_files} files in {result.scan_time:.2f}s")
-    if result.scanned_files > 0:
-        print(f"⚡ Speed: {result.scanned_files / result.scan_time:.1f} files/sec")
-    if result.skipped_files > 0:
-        print(f"⏭️  Skipped {result.skipped_files} files (size limit)")
-
+    print(f"✅ Scanned {result.scanned_files} files")
     print(f"🔎 Found {result.total_findings} potential secrets")
 
     if result.suppressed_findings > 0:
@@ -59,11 +59,6 @@ def cmd_scan(args: argparse.Namespace) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     formats = args.format.split(",") if args.format != "all" else ["json", "sarif", "html"]
-
-    # Generate SARIF first (needed for HTML embedding)
-    sarif_data = None
-    if "sarif" in formats or "html" in formats:
-        sarif_data = generate_sarif_report(result.findings, engine.rules, target_path)
 
     for fmt in formats:
         fmt = fmt.strip().lower()
@@ -77,13 +72,14 @@ def cmd_scan(args: argparse.Namespace) -> int:
             print(f"📄 JSON report saved to {json_path}")
 
         elif fmt == "sarif":
+            sarif_data = generate_sarif_report(result.findings, engine.rules, target_path)
             sarif_path = output_dir / "scan.sarif"
             save_sarif_report(sarif_data, sarif_path)
             print(f"📄 SARIF report saved to {sarif_path}")
 
         elif fmt == "html":
             html_content = generate_html_report(
-                result.findings, result.scanned_files, sarif_data, result.suppressed_findings
+                result.findings, result.scanned_files, result.suppressed_findings
             )
             html_path = output_dir / "scan.html"
             save_html_report(html_content, html_path)
@@ -92,9 +88,6 @@ def cmd_scan(args: argparse.Namespace) -> int:
     # Return exit code based on findings
     if result.total_findings > 0:
         print(f"\n⚠️  Found {result.total_findings} potential secrets!")
-        # Use soft-exit if requested (useful for CI/CD where you want visibility but not failure)
-        if args.soft_exit:
-            return 0
         return 1
 
     print("\n✅ No secrets found!")
@@ -180,41 +173,27 @@ def cmd_baseline(args: argparse.Namespace) -> int:
         print(f"Error: Target path does not exist: {target_path}", file=sys.stderr)
         return 1
 
-    # Support custom baseline path
-    if hasattr(args, 'output') and args.output:
-        baseline_path = Path(args.output)
-    else:
-        baseline_path = target_path / ".aegis.baseline"
+    baseline_path = target_path / ".aegis.baseline"
 
     if args.update:
-        # Run scan to find all secrets (without baseline filtering)
+        # Run scan to find all secrets
         config = ScanConfig(
             target_path=target_path,
             enable_entropy=False,  # Don't include entropy in baseline
-            baseline_path=None,  # Don't filter during baseline update
         )
 
         print(f"🔍 Scanning {target_path} to update baseline...")
         engine = ScanEngine(config)
         result = engine.scan()
 
-        # Load existing baseline if present (for merging)
-        if baseline_path.exists():
-            print(f"📦 Merging with existing baseline...")
-            baseline = Baseline.load(baseline_path)
-            original_count = len(baseline.entries)
-        else:
-            baseline = Baseline()
-            original_count = 0
+        # Create baseline from findings
+        baseline = Baseline()
+        for finding in result.findings:
+            baseline.add_finding(finding)
 
-        # Merge findings into baseline (preserves existing entries)
-        baseline.merge(result.findings)
-
-        # Save baseline (automatically sorts)
+        # Save baseline
         baseline.save(baseline_path)
-
-        added_count = len(baseline.entries) - original_count
-        print(f"✅ Baseline updated: {len(baseline.entries)} total, {added_count} new")
+        print(f"✅ Baseline updated with {len(result.findings)} finding(s)")
         print(f"📄 Saved to {baseline_path}")
         return 0
 
@@ -237,87 +216,39 @@ def cmd_rules(args: argparse.Namespace) -> int:
 
     rules = load_default_rules()
 
-    print(f"📋 Active Detection Rules ({len(rules)} total)\n")
+    if args.list:
+        # Table format
+        print(f"📋 Active Detection Rules ({len(rules)} total)\n")
 
-    for rule in rules:
-        rule_id = get_rule_id(rule.id)
-        print(f"  {rule_id} - {rule.name}")
-        print(f"    Severity: {rule.severity.upper()}")
-        print(f"    Description: {rule.description}")
+        # Calculate column widths
+        max_id_len = max(len(get_rule_id(r.id)) for r in rules)
+        max_name_len = max(len(r.name) for r in rules)
+        max_severity_len = max(len(r.severity) for r in rules)
+
+        # Print header
+        header = f"{'Rule ID':<{max_id_len}}  {'Name':<{max_name_len}}  {'Severity':<{max_severity_len}}"
+        print(header)
+        print("=" * len(header))
+
+        # Print rows
+        for rule in rules:
+            rule_id = get_rule_id(rule.id)
+            print(f"{rule_id:<{max_id_len}}  {rule.name:<{max_name_len}}  {rule.severity.upper():<{max_severity_len}}")
+
         print()
-
-    return 0
-
-
-def cmd_hook(args: argparse.Namespace) -> int:
-    """Execute the hook command."""
-    if args.install:
-        # Generate .pre-commit-config.yaml snippet
-        precommit_config = Path(".pre-commit-config.yaml")
-
-        snippet = """# Add this to your .pre-commit-config.yaml file:
-repos:
-  - repo: https://github.com/woozyrabbit123/aegis-seal
-    rev: main  # or specify a version tag
-    hooks:
-      - id: aegis-seal-scan
-"""
-
-        if precommit_config.exists():
-            print("⚠️  .pre-commit-config.yaml already exists!")
-            print("📝 Add the following to your configuration:\n")
-            print(snippet)
-        else:
-            print("📄 Creating .pre-commit-config.yaml...")
-            precommit_config.write_text(snippet)
-            print("✅ Created .pre-commit-config.yaml")
-            print("\n💡 Next steps:")
-            print("   1. Install pre-commit: pip install pre-commit")
-            print("   2. Install the hook: pre-commit install")
-            print("   3. Test it: pre-commit run --all-files")
-
         return 0
     else:
-        print("Usage: aegis-seal hook --install")
-        return 1
+        # Detailed format (default)
+        print(f"📋 Active Detection Rules ({len(rules)} total)\n")
 
+        for rule in rules:
+            rule_id = get_rule_id(rule.id)
+            print(f"  {rule_id} - {rule.name}")
+            print(f"    Severity: {rule.severity.upper()}")
+            print(f"    Description: {rule.description}")
+            print()
 
-def cmd_action(args: argparse.Namespace) -> int:
-    """Execute the action command."""
-    if args.example:
-        # Print example GitHub Action workflow
-        workflow = """name: Aegis Seal Security Scan
-
-on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
-
-jobs:
-  secret-scan:
-    name: Scan for Secrets
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      security-events: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Run Aegis Seal
-        uses: woozyrabbit123/aegis-seal/contrib/github-action@main
-        with:
-          target: src/
-          upload-sarif: true
-"""
-        print(workflow)
         return 0
-    else:
-        print("Usage: aegis-seal action --example")
-        return 1
 
 
 def main() -> int:
@@ -327,6 +258,7 @@ def main() -> int:
         description="Aegis Seal - Local-first secret scanner with auto-fix",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
 
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
@@ -348,18 +280,6 @@ def main() -> int:
         "--output", default="reports", help="Output directory for reports (default: reports)"
     )
     scan_parser.add_argument("--baseline", help="Path to baseline file (default: .aegis.baseline)")
-    scan_parser.add_argument(
-        "--max-workers", type=int, default=0,
-        help="Maximum parallel workers (0=auto, default: min(32, cpu_count))"
-    )
-    scan_parser.add_argument(
-        "--max-file-size", type=int, default=1_000_000,
-        help="Skip files larger than this size in bytes (default: 1MB)"
-    )
-    scan_parser.add_argument(
-        "--soft-exit", action="store_true",
-        help="Exit with code 0 even if secrets are found (useful for visibility-only CI checks)"
-    )
 
     # Fix command
     fix_parser = subparsers.add_parser("fix", help="Auto-fix secrets in Python files")
@@ -375,24 +295,10 @@ def main() -> int:
     baseline_parser.add_argument(
         "--update", action="store_true", help="Update baseline with current findings"
     )
-    baseline_parser.add_argument(
-        "--output", help="Custom baseline file path (default: <target>/.aegis.baseline)"
-    )
 
     # Rules command
     rules_parser = subparsers.add_parser("rules", help="List active detection rules")
-
-    # Hook command
-    hook_parser = subparsers.add_parser("hook", help="Manage pre-commit hooks")
-    hook_parser.add_argument(
-        "--install", action="store_true", help="Install pre-commit configuration"
-    )
-
-    # Action command
-    action_parser = subparsers.add_parser("action", help="Manage GitHub Actions")
-    action_parser.add_argument(
-        "--example", action="store_true", help="Print example workflow YAML"
-    )
+    rules_parser.add_argument("--list", action="store_true", help="Show rules in table format")
 
     args = parser.parse_args()
 
@@ -409,10 +315,6 @@ def main() -> int:
             return cmd_baseline(args)
         elif args.command == "rules":
             return cmd_rules(args)
-        elif args.command == "hook":
-            return cmd_hook(args)
-        elif args.command == "action":
-            return cmd_action(args)
         else:
             parser.print_help()
             return 1

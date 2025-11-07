@@ -6,15 +6,7 @@ from pathlib import Path
 import pytest
 
 from aegisseal.report.html import generate_html_report, save_html_report
-from aegisseal.report.sarif import generate_sarif_report
 from aegisseal.scanning.detectors import Finding
-from aegisseal.scanning.detectors import load_default_rules
-
-
-def _generate_sarif_for_findings(findings):
-    """Helper to generate SARIF data for findings."""
-    rules = load_default_rules()
-    return generate_sarif_report(findings, rules, Path("."))
 
 
 def test_html_generation():
@@ -32,8 +24,7 @@ def test_html_generation():
         )
     ]
 
-    sarif_data = _generate_sarif_for_findings(findings)
-    html = generate_html_report(findings, scanned_files=1, sarif_data=sarif_data)
+    html = generate_html_report(findings, scanned_files=1)
 
     assert isinstance(html, str)
     assert len(html) > 0
@@ -54,8 +45,7 @@ def test_html_contains_required_elements():
         )
     ]
 
-    sarif_data = _generate_sarif_for_findings(findings)
-    html = generate_html_report(findings, scanned_files=1, sarif_data=sarif_data)
+    html = generate_html_report(findings, scanned_files=1)
 
     # Check for essential HTML elements
     assert "<!DOCTYPE html>" in html
@@ -68,8 +58,7 @@ def test_html_contains_required_elements():
 def test_html_inline_styles():
     """Test that HTML includes inline styles (single-file)."""
     findings = []
-    sarif_data = _generate_sarif_for_findings(findings)
-    html = generate_html_report(findings, scanned_files=0, sarif_data=sarif_data)
+    html = generate_html_report(findings, scanned_files=0)
 
     # Should have inline CSS
     assert "<style>" in html
@@ -94,23 +83,21 @@ def test_html_inline_javascript():
         )
     ]
 
-    sarif_data = _generate_sarif_for_findings(findings)
-    html = generate_html_report(findings, scanned_files=1, sarif_data=sarif_data)
+    html = generate_html_report(findings, scanned_files=1)
 
-    # Should have inline JavaScript (now with embedded SARIF)
+    # Should have inline JavaScript
     assert "<script>" in html
     assert "</script>" in html
-    assert 'id="sarif-data"' in html  # Updated: now uses embedded SARIF
+    assert "window.REPORT_DATA" in html
 
     # Should not reference external scripts
-    assert '<script src="http' not in html  # Updated to check for http specifically
+    assert '<script src=' not in html
 
 
 def test_html_dark_mode():
     """Test that HTML includes dark mode styles."""
     findings = []
-    sarif_data = _generate_sarif_for_findings(findings)
-    html = generate_html_report(findings, scanned_files=0, sarif_data=sarif_data)
+    html = generate_html_report(findings, scanned_files=0)
 
     # Check for dark mode color variables
     assert "--bg-primary" in html or "background-color:" in html
@@ -142,8 +129,7 @@ def test_html_severity_counts():
         ),
     ]
 
-    sarif_data = _generate_sarif_for_findings(findings)
-    html = generate_html_report(findings, scanned_files=1, sarif_data=sarif_data)
+    html = generate_html_report(findings, scanned_files=1)
 
     # Should show counts
     assert "Critical" in html or "critical" in html
@@ -165,8 +151,7 @@ def test_html_client_side_filtering():
         )
     ]
 
-    sarif_data = _generate_sarif_for_findings(findings)
-    html = generate_html_report(findings, scanned_files=1, sarif_data=sarif_data)
+    html = generate_html_report(findings, scanned_files=1)
 
     # Should have filter controls
     assert "filter" in html.lower()
@@ -188,8 +173,7 @@ def test_html_saves_to_file():
         )
     ]
 
-    sarif_data = _generate_sarif_for_findings(findings)
-    html = generate_html_report(findings, scanned_files=1, sarif_data=sarif_data)
+    html = generate_html_report(findings, scanned_files=1)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)

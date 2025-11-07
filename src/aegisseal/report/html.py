@@ -1,38 +1,46 @@
-"""HTML report generator with embedded SARIF data (deterministic, single-file)."""
+"""HTML report generator (single-file with dark mode)."""
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
 from aegisseal import __version__
 from aegisseal.scanning.detectors import Finding
-from aegisseal.utils.ids import stable_sort_results
 
 
 def generate_html_report(
     findings: List[Finding],
     scanned_files: int,
-    sarif_data: Dict[str, Any],
     suppressed_count: int = 0,
 ) -> str:
     """
-    Generate a single-file HTML report with embedded SARIF data.
-
-    NO timestamps, NO random IDs - completely deterministic output.
+    Generate a single-file HTML report with dark mode.
 
     Args:
         findings: List of findings
         scanned_files: Number of files scanned
-        sarif_data: SARIF report data to embed
         suppressed_count: Number of findings suppressed by baseline
 
     Returns:
         HTML report as string
     """
-    # Sort findings for deterministic display
-    findings = stable_sort_results(findings)
+    # Prepare findings data for JavaScript
+    findings_data = []
+    for finding in findings:
+        findings_data.append(
+            {
+                "ruleId": finding.rule_id,
+                "ruleName": finding.rule_name,
+                "severity": finding.severity,
+                "file": finding.file_path,
+                "line": finding.line_number,
+                "redactedMatch": finding.redacted_match,
+                "lineContent": finding.line_content.strip(),
+            }
+        )
 
-    # Count by severity (deterministic order)
+    # Count by severity
     severity_counts = {
         "critical": sum(1 for f in findings if f.severity.lower() == "critical"),
         "high": sum(1 for f in findings if f.severity.lower() == "high"),
@@ -40,16 +48,18 @@ def generate_html_report(
         "low": sum(1 for f in findings if f.severity.lower() == "low"),
     }
 
-    # Embed SARIF data as JSON (deterministic encoding)
-    sarif_json = json.dumps(
-        sarif_data,
-        indent=None,  # Compact for embedding
-        separators=(",", ":"),
-        ensure_ascii=False,
-        sort_keys=False,
-    )
+    report_data = {
+        "version": __version__,
+        "timestamp": datetime.now().isoformat(),
+        "summary": {
+            "totalFindings": len(findings),
+            "scannedFiles": scanned_files,
+            "suppressedFindings": suppressed_count,
+            "bySeverity": severity_counts,
+        },
+        "findings": findings_data,
+    }
 
-    # Generate HTML (no timestamps, no random IDs)
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -74,6 +84,7 @@ def generate_html_report(
             --high: #ff8800;
             --medium: #ffaa00;
             --low: #4488ff;
+            --success: #44ff88;
         }}
 
         body {{
@@ -144,53 +155,51 @@ def generate_html_report(
             border-radius: 8px;
             margin-bottom: 20px;
             border: 1px solid var(--border-color);
+        }}
+
+        .filter-group {{
             display: flex;
-            gap: 20px;
+            gap: 15px;
             align-items: center;
             flex-wrap: wrap;
         }}
 
-        .filters label {{
+        .filter-group label {{
             display: flex;
             align-items: center;
             gap: 5px;
             cursor: pointer;
         }}
 
-        .filters input[type="checkbox"] {{
+        .filter-group input[type="checkbox"] {{
             cursor: pointer;
         }}
 
-        .findings-table {{
+        .findings-list {{
             background: var(--bg-secondary);
             border-radius: 8px;
             border: 1px solid var(--border-color);
-            overflow-x: auto;
         }}
 
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-        }}
-
-        thead {{
-            background: var(--bg-tertiary);
-        }}
-
-        th {{
-            padding: 15px;
-            text-align: left;
-            font-weight: 600;
-            border-bottom: 2px solid var(--border-color);
-        }}
-
-        td {{
-            padding: 15px;
+        .finding {{
+            padding: 20px;
             border-bottom: 1px solid var(--border-color);
         }}
 
-        tbody tr:hover {{
-            background: var(--bg-tertiary);
+        .finding:last-child {{
+            border-bottom: none;
+        }}
+
+        .finding-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 10px;
+        }}
+
+        .finding-title {{
+            font-weight: bold;
+            font-size: 1.1rem;
         }}
 
         .severity-badge {{
@@ -199,28 +208,47 @@ def generate_html_report(
             font-size: 0.85rem;
             font-weight: bold;
             text-transform: uppercase;
-            display: inline-block;
         }}
 
-        .badge-critical {{ background: var(--critical); color: white; }}
-        .badge-high {{ background: var(--high); color: white; }}
-        .badge-medium {{ background: var(--medium); color: black; }}
-        .badge-low {{ background: var(--low); color: white; }}
+        .badge-critical {{
+            background: var(--critical);
+            color: white;
+        }}
 
-        .file-path {{
+        .badge-high {{
+            background: var(--high);
+            color: white;
+        }}
+
+        .badge-medium {{
+            background: var(--medium);
+            color: black;
+        }}
+
+        .badge-low {{
+            background: var(--low);
+            color: white;
+        }}
+
+        .finding-location {{
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }}
+
+        .finding-code {{
+            background: var(--bg-tertiary);
+            padding: 10px;
+            border-radius: 4px;
             font-family: 'Courier New', monospace;
             font-size: 0.9rem;
+            overflow-x: auto;
+            margin-top: 10px;
         }}
 
-        .line-num {{
+        .no-findings {{
+            padding: 40px;
+            text-align: center;
             color: var(--text-secondary);
-            font-family: 'Courier New', monospace;
-        }}
-
-        .rule-id {{
-            font-family: 'Courier New', monospace;
-            color: var(--text-secondary);
-            font-size: 0.85rem;
         }}
 
         .hidden {{
@@ -235,25 +263,19 @@ def generate_html_report(
             color: var(--text-secondary);
             font-size: 0.9rem;
         }}
-
-        .no-findings {{
-            padding: 40px;
-            text-align: center;
-            color: var(--text-secondary);
-        }}
     </style>
 </head>
 <body>
     <div class="container">
         <header>
             <h1>🛡️ Aegis Seal Security Report</h1>
-            <div class="version">Version {__version__}</div>
+            <div class="version">Version {__version__} • Generated {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
         </header>
 
         <div class="summary">
             <div class="summary-card">
                 <h3>Total Findings</h3>
-                <div class="value">{len(findings)}</div>
+                <div class="value" id="total-findings">{len(findings)}</div>
             </div>
             <div class="summary-card">
                 <h3>Critical</h3>
@@ -278,80 +300,56 @@ def generate_html_report(
         </div>
 
         <div class="filters">
-            <strong>Filter:</strong>
-            <label><input type="checkbox" class="severity-filter" value="critical" checked> Critical</label>
-            <label><input type="checkbox" class="severity-filter" value="high" checked> High</label>
-            <label><input type="checkbox" class="severity-filter" value="medium" checked> Medium</label>
-            <label><input type="checkbox" class="severity-filter" value="low" checked> Low</label>
+            <div class="filter-group">
+                <strong>Filter by severity:</strong>
+                <label><input type="checkbox" class="severity-filter" value="critical" checked> Critical</label>
+                <label><input type="checkbox" class="severity-filter" value="high" checked> High</label>
+                <label><input type="checkbox" class="severity-filter" value="medium" checked> Medium</label>
+                <label><input type="checkbox" class="severity-filter" value="low" checked> Low</label>
+            </div>
         </div>
 
-        <div class="findings-table" id="findings-container"></div>
+        <div class="findings-list" id="findings-list">
+            <!-- Findings will be rendered here by JavaScript -->
+        </div>
 
         <footer>
             <p>Generated by Aegis Seal v{__version__}</p>
-            <p>SARIF data embedded for programmatic access</p>
         </footer>
     </div>
 
-    <script id="sarif-data" type="application/json">{sarif_json}</script>
-
     <script>
-        // Load SARIF data
-        const sarifData = JSON.parse(document.getElementById('sarif-data').textContent);
-
-        // Extract findings from SARIF
-        const results = sarifData.runs[0].results || [];
-        const rules = sarifData.runs[0].tool.driver.rules || [];
-
-        // Convert SARIF to display format
-        const findings = results.map(result => {{
-            const rule = rules[result.ruleIndex] || {{}};
-            const location = result.locations[0].physicalLocation;
-            const severity = (result.properties && result.properties['aegis:severity']) ||
-                           (result.level === 'error' ? 'high' : result.level);
-
-            return {{
-                file: location.artifactLocation.uri,
-                line: location.region.startLine,
-                ruleId: result.ruleId,
-                ruleName: rule.name || result.ruleId,
-                severity: severity,
-                message: result.message.text
-            }};
-        }});
+        window.REPORT_DATA = {json.dumps(report_data)};
 
         function renderFindings() {{
-            const container = document.getElementById('findings-container');
+            const findingsList = document.getElementById('findings-list');
             const checkedSeverities = Array.from(document.querySelectorAll('.severity-filter:checked'))
                 .map(cb => cb.value);
 
-            const filtered = findings.filter(f => checkedSeverities.includes(f.severity.toLowerCase()));
+            const filteredFindings = window.REPORT_DATA.findings.filter(f =>
+                checkedSeverities.includes(f.severity.toLowerCase())
+            );
 
-            if (filtered.length === 0) {{
-                container.innerHTML = '<div class="no-findings">No findings match the current filters.</div>';
+            if (filteredFindings.length === 0) {{
+                findingsList.innerHTML = '<div class="no-findings">No findings match the current filters.</div>';
                 return;
             }}
 
-            let html = '<table><thead><tr>';
-            html += '<th>File</th>';
-            html += '<th>Line</th>';
-            html += '<th>Rule ID</th>';
-            html += '<th>Severity</th>';
-            html += '<th>Description</th>';
-            html += '</tr></thead><tbody>';
-
-            filtered.forEach(f => {{
-                html += '<tr>';
-                html += `<td class="file-path">${{escapeHtml(f.file)}}</td>`;
-                html += `<td class="line-num">${{f.line}}</td>`;
-                html += `<td class="rule-id">${{f.ruleId}}</td>`;
-                html += `<td><span class="severity-badge badge-${{f.severity.toLowerCase()}}">${{f.severity}}</span></td>`;
-                html += `<td>${{escapeHtml(f.message)}}</td>`;
-                html += '</tr>';
-            }});
-
-            html += '</tbody></table>';
-            container.innerHTML = html;
+            findingsList.innerHTML = filteredFindings.map(finding => `
+                <div class="finding" data-severity="${{finding.severity.toLowerCase()}}">
+                    <div class="finding-header">
+                        <div class="finding-title">${{finding.ruleName}}</div>
+                        <span class="severity-badge badge-${{finding.severity.toLowerCase()}}">${{finding.severity}}</span>
+                    </div>
+                    <div class="finding-location">
+                        📄 ${{finding.file}}:${{finding.line}} • 🔍 ${{finding.ruleId}}
+                    </div>
+                    <div>
+                        <strong>Redacted match:</strong> <code>${{finding.redactedMatch}}</code>
+                    </div>
+                    <div class="finding-code">${{escapeHtml(finding.lineContent)}}</div>
+                </div>
+            `).join('');
         }}
 
         function escapeHtml(text) {{
@@ -363,9 +361,9 @@ def generate_html_report(
         // Initial render
         renderFindings();
 
-        // Add filter listeners
-        document.querySelectorAll('.severity-filter').forEach(cb => {{
-            cb.addEventListener('change', renderFindings);
+        // Add event listeners to filters
+        document.querySelectorAll('.severity-filter').forEach(checkbox => {{
+            checkbox.addEventListener('change', renderFindings);
         }});
     </script>
 </body>
@@ -386,6 +384,7 @@ def save_html_report(
         html_content: HTML report string
         output_path: Path to save report
     """
-    from aegisseal.utils.io import write_text_atomic
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    write_text_atomic(output_path, html_content)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(html_content)

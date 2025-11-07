@@ -4,12 +4,10 @@ import difflib
 import re
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import libcst as cst
 from libcst import matchers as m
-from libcst.codemod import CodemodContext, VisitorBasedCodemodCommand
-from libcst.codemod.visitors import AddImportsVisitor
 
 from aegisseal.scanning.detectors import Finding
 
@@ -39,10 +37,6 @@ class SecretReplacer(cst.CSTTransformer):
         for finding in findings:
             self.findings_by_line[finding.line_number] = finding
 
-        # Map secret values to env var names for consistency
-        # This ensures repeated secrets use the same env var name
-        self.secret_to_env_var: Dict[str, str] = {}
-
     def leave_SimpleString(
         self, original_node: cst.SimpleString, updated_node: cst.SimpleString
     ) -> cst.BaseExpression:
@@ -53,31 +47,20 @@ class SecretReplacer(cst.CSTTransformer):
             return updated_node
 
         line_number = pos.start.line
-        string_value = original_node.value
 
         # Check if this line has a finding
-        finding = None
-        if line_number in self.findings_by_line:
-            finding = self.findings_by_line[line_number]
-            # Verify the string contains the matched secret
-            if finding.matched_string not in string_value:
-                finding = None
-
-        # For multiline strings, also check if any finding's secret is in this string
-        # This handles cases where the finding line is within a multiline string
-        if finding is None:
-            for f in self.findings:
-                if f.matched_string in string_value:
-                    # Verify this finding overlaps with this string's position
-                    if pos.start.line <= f.line_number <= pos.end.line:
-                        finding = f
-                        break
-
-        if finding is None:
+        if line_number not in self.findings_by_line:
             return updated_node
 
-        # Generate a sensible environment variable name (with caching for repeated secrets)
-        env_var_name = self._get_or_create_env_var_name(finding)
+        finding = self.findings_by_line[line_number]
+
+        # Check if the string contains the matched secret
+        string_value = original_node.value
+        if finding.matched_string not in string_value:
+            return updated_node
+
+        # Generate a sensible environment variable name
+        env_var_name = self._generate_env_var_name(finding)
 
         # Create os.getenv() call
         self.needs_os_import = True
@@ -94,86 +77,13 @@ class SecretReplacer(cst.CSTTransformer):
 
         return getenv_call
 
-    def leave_FormattedString(
-        self, original_node: cst.FormattedString, updated_node: cst.FormattedString
-    ) -> cst.BaseExpression:
-        """Handle f-strings by replacing only literal segments."""
-        pos = self.get_metadata(cst.metadata.PositionProvider, original_node)
-        if pos is None:
-            return updated_node
-
-        line_number = pos.start.line
-
-        # Check if this line has a finding
-        if line_number not in self.findings_by_line:
-            return updated_node
-
-        finding = self.findings_by_line[line_number]
-
-        # Search for the secret in the literal parts of the f-string
-        new_parts = []
-        modified = False
-
-        for part in updated_node.parts:
-            if isinstance(part, cst.FormattedStringText):
-                # Check if this literal segment contains the secret
-                if finding.matched_string in part.value:
-                    # Replace the literal with an expression that calls os.getenv()
-                    env_var_name = self._get_or_create_env_var_name(finding)
-                    self.needs_os_import = True
-                    self.replacements_made += 1
-                    modified = True
-
-                    # Create os.getenv('VAR_NAME') as a formatted expression
-                    # Use single quotes to avoid conflicts with f-string double quotes
-                    getenv_expr = cst.FormattedStringExpression(
-                        expression=cst.Call(
-                            func=cst.Attribute(
-                                value=cst.Name("os"),
-                                attr=cst.Name("getenv"),
-                            ),
-                            args=[cst.Arg(cst.SimpleString(f"'{env_var_name}'"))],
-                        )
-                    )
-                    new_parts.append(getenv_expr)
-                else:
-                    new_parts.append(part)
-            else:
-                # Keep expressions as-is
-                new_parts.append(part)
-
-        if modified:
-            return updated_node.with_changes(parts=new_parts)
-
-        return updated_node
-
     def leave_ConcatenatedString(
         self, original_node: cst.ConcatenatedString, updated_node: cst.ConcatenatedString
     ) -> cst.BaseExpression:
-        """Handle concatenated strings (implicit string concatenation)."""
-        # ConcatenatedString is for implicit concatenation like "a" "b"
-        # FormattedString handles f-strings
-        # For now, we'll let the child nodes handle their own replacements
+        """Handle concatenated strings (e.g., f-strings)."""
+        # For simplicity, we'll skip f-strings for now
+        # Could be enhanced to handle them more gracefully
         return updated_node
-
-    def _get_or_create_env_var_name(self, finding: Finding) -> str:
-        """
-        Get or create an environment variable name for a secret.
-
-        Uses caching to ensure repeated secrets get the same env var name.
-
-        Args:
-            finding: The finding
-
-        Returns:
-            Environment variable name
-        """
-        secret_key = finding.matched_string
-
-        if secret_key not in self.secret_to_env_var:
-            self.secret_to_env_var[secret_key] = self._generate_env_var_name(finding)
-
-        return self.secret_to_env_var[secret_key]
 
     @staticmethod
     def _generate_env_var_name(finding: Finding) -> str:
@@ -209,22 +119,65 @@ class SecretReplacer(cst.CSTTransformer):
         return "SECRET_VALUE"
 
 
-def add_os_import_idempotent(tree: cst.Module, context: CodemodContext) -> cst.Module:
+def add_os_import(tree: cst.Module) -> cst.Module:
     """
-    Add 'import os' to the module using AddImportsVisitor for idempotency.
-
-    This ensures we don't add duplicate imports if os is already imported.
+    Add 'import os' to the module if not already present.
 
     Args:
         tree: CST module
-        context: Codemod context
 
     Returns:
         Modified module with import added
     """
-    # Use AddImportsVisitor for idempotent import addition
-    AddImportsVisitor.add_needed_import(context, "os")
-    return tree
+    # Check if os is already imported
+    has_os_import = False
+
+    for statement in tree.body:
+        if m.matches(
+            statement,
+            m.SimpleStatementLine(
+                body=[m.Import(names=[m.AtLeastN([m.ImportAlias(name=m.Name("os"))], n=1)])]
+            ),
+        ):
+            has_os_import = True
+            break
+
+        if m.matches(
+            statement,
+            m.SimpleStatementLine(
+                body=[
+                    m.ImportFrom(
+                        module=m.Name("os"),
+                    )
+                ]
+            ),
+        ):
+            has_os_import = True
+            break
+
+    if has_os_import:
+        return tree
+
+    # Add import at the top (after any docstrings)
+    import_statement = cst.SimpleStatementLine(
+        body=[cst.Import(names=[cst.ImportAlias(name=cst.Name("os"))])]
+    )
+
+    # Find the insertion point (after module docstring if present)
+    insertion_index = 0
+    if tree.body and isinstance(tree.body[0], cst.SimpleStatementLine):
+        first_stmt = tree.body[0]
+        if (
+            first_stmt.body
+            and isinstance(first_stmt.body[0], cst.Expr)
+            and isinstance(first_stmt.body[0].value, cst.SimpleString)
+        ):
+            insertion_index = 1
+
+    new_body = list(tree.body)
+    new_body.insert(insertion_index, import_statement)
+
+    return tree.with_changes(body=new_body)
 
 
 def apply_fixes(
@@ -264,30 +217,22 @@ def apply_fixes(
         if replacer.replacements_made == 0:
             return True, "No replacements made (no matching string literals found)"
 
-        # Add os import if needed (idempotently)
+        # Add os import if needed
         if replacer.needs_os_import:
-            # Create a codemod context for AddImportsVisitor
-            context = CodemodContext()
-            new_tree = add_os_import_idempotent(new_tree, context)
-
-            # Apply the import additions
-            new_tree = new_tree.visit(AddImportsVisitor(context))
+            new_tree = add_os_import(new_tree)
 
         # Generate new code
         new_code = new_tree.code
 
-        # Generate diff with stable ordering
-        # Sort lines to ensure deterministic output
-        diff_lines = list(difflib.unified_diff(
+        # Generate diff
+        diff = difflib.unified_diff(
             source_code.splitlines(keepends=True),
             new_code.splitlines(keepends=True),
             fromfile=str(file_path),
             tofile=str(file_path),
             lineterm="",
-        ))
-
-        # Diff is already in line order, so it's naturally stable
-        diff_text = "".join(diff_lines)
+        )
+        diff_text = "".join(diff)
 
         if not dry_run:
             # Create backup
